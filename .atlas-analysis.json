@@ -1,0 +1,91 @@
+{
+  "projectType": "saas",
+  "projectName": "Espacios Seguros IA",
+  "projectDescription": "An AI-powered public space monitoring system that uses YOLO and DeepSORT to detect aggressions, weapons, trash accumulation, and crowd congestion in real time via security cameras.",
+  "theme": "linden",
+  "primaryColor": "#1a1a2e",
+  "lightColor": "#e94560",
+  "darkColor": "#0f3460",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["introduction", "architecture"]
+          },
+          {
+            "group": "Get Started",
+            "pages": ["getting-started/quickstart-local", "getting-started/quickstart-colab", "getting-started/docker-deployment"]
+          },
+          {
+            "group": "Detection Modules",
+            "pages": [
+              "modules/aggression-detection",
+              "modules/weapon-detection",
+              "modules/trash-detection",
+              "modules/zone-counting"
+            ]
+          },
+          {
+            "group": "Frontend",
+            "pages": ["frontend/overview", "frontend/admin-panel", "frontend/alerts"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "User Management",
+            "pages": ["api/usuarios"]
+          },
+          {
+            "group": "Detection Events",
+            "pages": ["api/agresiones", "api/armas", "api/basura", "api/conteo-zona", "api/personas-detectadas"]
+          },
+          {
+            "group": "Alerts",
+            "pages": ["api/alertas-congestion"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Real-time aggression detection using YOLO pose estimation and DeepSORT tracking",
+    "Weapon detection (bladed and firearm) via Roboflow-trained custom model",
+    "Trash/waste segmentation and accumulation monitoring",
+    "Zone-based crowd counting with congestion alerts",
+    "Microservices architecture with Spring Boot backends and MySQL persistence",
+    "HTML/JS admin dashboard with role-based access (admin/operator)",
+    "Push notification integration for incident alerts",
+    "Google Colab and local execution modes"
+  ],
+  "publicApiSurface": [
+    "POST /usuarios/registro",
+    "POST /usuarios/login",
+    "GET /usuarios/show",
+    "PUT /usuarios/{id}/password",
+    "PUT /usuarios/{id}/rol",
+    "PUT /usuarios/{id}/status",
+    "GET /agresiones",
+    "POST /agresiones",
+    "GET /agresiones/{id}",
+    "GET /agresiones/count",
+    "GET /api/armas/alertas",
+    "GET /alertas/get",
+    "GET /api/detections",
+    "GET /api/totales",
+    "GET /api/proporciones",
+    "GET /api/por-fecha",
+    "GET /api/por-dia-semana",
+    "GET /api/conteo/entre-semana",
+    "GET /api/conteo/fin-semana",
+    "GET /api/conteo/desecho-dia",
+    "GET /conteo/por-fecha",
+    "GET /conteo/por-rango",
+    "GET /deteccion/por-dia-semana"
+  ]
+}
