@@ -1,0 +1,181 @@
+---
+title: "Zone-based crowd counting"
+description: "Real-time person counting per spatial zone with congestion threshold alerts."
+---
+
+The zone-based crowd counting module divides each video frame into a configurable grid and tracks how many people occupy each cell, how long each person spends in each cell, and when any cell becomes congested. All counts, dwell times, and congestion alerts are persisted to MySQL using batched inserts.
+
+## Model and tracker
+
+| Property | Value |
+|---|---|
+| Model | `yolov8m.pt` (YOLOv8 medium) |
+| Tracker | ByteTrack (`bytetrack.yaml`) |
+| Detection class | Person only (`classes=[0]`) |
+| Confidence threshold | `0.4` |
+
+## Grid system
+
+The frame is divided into a 2×2 grid by default, producing four independent counting zones. The grid dimensions are controlled by two constants:
+
+```python conteo_area.py
+grid_rows, grid_cols = 2, 2
+cell_height = height // grid_rows
+cell_width  = width  // grid_cols
+```
+
+Change `grid_rows` and `grid_cols` to any positive integers to create a different grid layout (e.g., `3, 3` for a 3×3 grid of nine zones).
+
+## Zone assignment
+
+Persons are assigned to grid cells using the **bottom-center** of their bounding box, not the geometric center. This anchors the person to the ground plane and reduces zone-switching noise when a person is near a cell boundary:
+
+```python conteo_area.py
+cx = (x1 + x2) // 2  # horizontal center
+cy = y2               # bottom edge (ground contact point)
+
+fila, col = cy // cell_height, cx // cell_width
+```
+
+## Congestion threshold
+
+A cell is considered congested when the count of persons currently in it reaches or exceeds `umbral_concurrido`:
+
+```python conteo_area.py
+umbral_concurrido = 5  # persons per cell
+```
+
+<Warning>
+  When a cell is congested, it is drawn in **red** on the output video and an entry is added to the `alertas_congestion` buffer. This buffer is flushed to the database every 5 seconds along with the other batched inserts.
+</Warning>
+
+## Grid visualization
+
+The grid overlay is drawn every frame. Cell color depends on whether the count meets the congestion threshold:
+
+```python conteo_area.py
+for i in range(grid_rows):
+    for j in range(grid_cols):
+        cantidad = int(grid_counts[i, j])
+
+        x1, y1 = j * cell_width,  i * cell_height
+        x2, y2 = x1 + cell_width, y1 + cell_height
+
+        color = (0, 0, 255) if cantidad >= umbral_concurrido else (0, 255, 0)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        cv2.putText(frame, f"{cantidad} p", (x1 + 5, y1 + 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+```
+
+Each cell displays the current person count (`N p`) in the top-left corner of the cell. Each tracked person also receives an overlay showing their ID and cumulative dwell time:
+
+```python conteo_area.py
+cv2.putText(frame, f"ID:{id_persona} T:{int(tiempo_en_zona)}s", (cx, y1 - 10),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+```
+
+## Time tracking
+
+Dwell time per person per cell is accumulated using wall-clock `delta_time` between frames rather than frame count. This produces accurate second-level measurements regardless of video FPS or processing speed:
+
+```python conteo_area.py
+delta_time = tiempo_actual - tiempo_anterior_frame
+timpo_anterior_frame = tiempo_actual
+
+# Accumulate time only when the person remains in the same cell
+tiempo_celda[id_persona][(fila, col)] += delta_time
+```
+
+When a person moves to a different cell, their time counter for that cell resets to zero and a new accumulator is started for the new cell.
+
+## Batch insert intervals
+
+All database writes are batched to reduce connection overhead:
+
+| Event | Buffer | Flush interval |
+|---|---|---|
+| New person first seen | Direct insert (no buffer) | Immediate |
+| Dwell time log | `buffer_zona` | Every 5 seconds |
+| Zone count snapshot | `buffer_conteo` | Every 3 seconds |
+| Congestion alert | `buffer_alertas` | Every 5 seconds |
+| Batch commit | All buffers | Every 5 seconds |
+
+<Note>
+  New persons (`personas_detectadas`) are inserted immediately rather than buffered, so their first-seen timestamp is accurate. Duplicate inserts (e.g., after a script restart) are silently ignored via `errno 1062` handling.
+</Note>
+
+## Database schema
+
+<Tabs>
+  <Tab title="personas_detectadas">
+    Records each unique person the first time they are seen.
+
+    ```sql
+    CREATE TABLE personas_detectadas (
+        persona_id         INT PRIMARY KEY,  -- ByteTrack tracker ID
+        timestamp_detectado DATETIME         -- First detection time
+    );
+    ```
+  </Tab>
+  <Tab title="tiempo_en_zona">
+    Logs dwell time for each person-cell combination, appended every 5 seconds while the person remains in the cell.
+
+    ```sql
+    CREATE TABLE tiempo_en_zona (
+        id             INT AUTO_INCREMENT PRIMARY KEY,
+        persona_id     INT,
+        fila           INT,     -- Grid row (0-indexed)
+        columna        INT,     -- Grid column (0-indexed)
+        tiempo_segundos FLOAT,  -- Cumulative seconds in this cell
+        timestamp      DATETIME
+    );
+    ```
+  </Tab>
+  <Tab title="conteo_zona">
+    Snapshots the person count per cell every 3 seconds (only for cells with at least one person).
+
+    ```sql
+    CREATE TABLE conteo_zona (
+        id        INT AUTO_INCREMENT PRIMARY KEY,
+        fila      INT,
+        columna   INT,
+        cantidad  INT,
+        timestamp DATETIME
+    );
+    ```
+  </Tab>
+  <Tab title="alertas_congestion">
+    Records congestion events when a cell reaches or exceeds `umbral_concurrido`.
+
+    ```sql
+    CREATE TABLE alertas_congestion (
+        id             INT AUTO_INCREMENT PRIMARY KEY,
+        fila           INT,
+        columna        INT,
+        cantidad       INT,
+        fecha_creacion DATETIME
+    );
+    ```
+  </Tab>
+</Tabs>
+
+## Configuration reference
+
+```python conteo_area.py
+MODEL_PATH        = "yolov8m.pt"
+INPUT_VIDEO_PATH  = "personas_calle_3.mp4"  # Set to "0" for webcam
+OUTPUT_VIDEO_PATH = "conteo_area_output.mp4"
+
+grid_rows         = 2      # Grid rows
+grid_cols         = 2      # Grid columns
+umbral_concurrido = 5      # Persons per cell to trigger congestion
+intervalo_zona    = 5      # Seconds between dwell time log entries
+intervalo_conteo  = 3      # Seconds between count snapshots
+intervalo_batch   = 5      # Seconds between batch DB inserts
+```
+
+Set `INPUT_VIDEO_PATH = "0"` to use a live webcam feed instead of a file.
+
+## Resource cleanup
+
+All resources (video capture, video writer, database cursor and connection) are released in a `finally` block. Any data remaining in the three buffers at the time of shutdown is flushed to the database before the connection closes, ensuring no data is lost on a clean exit.

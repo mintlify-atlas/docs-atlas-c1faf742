@@ -1,0 +1,62 @@
+---
+title: "Espacios Seguros IA"
+description: "AI-powered public space monitoring using YOLO and DeepSORT for real-time detection of aggressions, weapons, trash, and crowd congestion."
+---
+
+<CardGroup cols={2}>
+  <Card title="Quickstart (Local)" icon="laptop" href="/getting-started/quickstart-local">
+    Run detection scripts locally with your own camera or video files
+  </Card>
+  <Card title="Quickstart (Colab)" icon="cloud" href="/getting-started/quickstart-colab">
+    Process videos in Google Colab without local GPU requirements
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/getting-started/docker-deployment">
+    Deploy the full microservices stack with Docker Compose
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/usuarios">
+    Explore REST endpoints for detections, alerts, and user management
+  </Card>
+</CardGroup>
+
+## What is Espacios Seguros IA?
+
+Espacios Seguros IA is an intelligent video surveillance system designed to monitor public spaces and detect security incidents in real time. It uses [YOLO](https://github.com/ultralytics/ultralytics) (You Only Look Once) object detection combined with [DeepSORT](https://github.com/levan92/deep_sort_realtime) multi-object tracking to analyze camera feeds and video recordings.
+
+The system is built around four core detection modules:
+
+<CardGroup cols={2}>
+  <Card title="Aggression Detection" icon="person-falling-burst" href="/modules/aggression-detection">
+    Detects fights, pushes, hits, and aggressive body movements using pose estimation on YOLO11x-pose
+  </Card>
+  <Card title="Weapon Detection" icon="shield-exclamation" href="/modules/weapon-detection">
+    Identifies bladed weapons and firearms using a Roboflow-trained custom model with ByteTrack
+  </Card>
+  <Card title="Trash Detection" icon="trash" href="/modules/trash-detection">
+    Segments and monitors waste accumulation zones using YOLO segmentation models
+  </Card>
+  <Card title="Zone Counting" icon="people-group" href="/modules/zone-counting">
+    Counts people per spatial zone in real time and generates congestion alerts
+  </Card>
+</CardGroup>
+
+## System architecture
+
+The platform is composed of three layers:
+
+- **AI layer** — Python scripts (local and Google Colab) running YOLO models that write detections to a MySQL database
+- **Backend layer** — Spring Boot microservices exposing REST APIs for each detection domain
+- **Frontend layer** — HTML/JavaScript dashboard with role-based access for admins and operators
+
+<Info>
+The AI detection scripts write directly to MySQL. Spring Boot microservices read that data and expose it via REST APIs consumed by the dashboard.
+</Info>
+
+## Key capabilities
+
+- Real-time processing of live camera feeds or pre-recorded video files
+- Pose-based aggression analysis tracking hand speed, torso movement, and proximity
+- Custom-trained weapon detection model hosted on Roboflow
+- Grid-based zone counting with configurable congestion thresholds
+- Push notification integration for alerting authorities
+- Role-based admin panel with incident history and analytics dashboards
+- Runs locally or on Google Colab depending on available hardware

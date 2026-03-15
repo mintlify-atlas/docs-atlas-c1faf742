@@ -1,0 +1,94 @@
+---
+title: "Zone counting API"
+description: "REST endpoints for zone-based crowd counting statistics."
+---
+
+**Base URL**: `http://localhost:8083`
+
+---
+
+## GET /conteo/por-fecha
+
+Returns all zone-count records that match an exact timestamp.
+
+### Query parameters
+
+<ParamField query="timestamp" type="string" required>
+  ISO-8601 datetime to filter by (e.g. `2024-06-01T14:00:00`). Must be URL-encoded.
+</ParamField>
+
+### Response
+
+Returns a JSON array of `ConteoZona` objects.
+
+<ResponseField name="id" type="integer">
+  Auto-generated record identifier.
+</ResponseField>
+
+<ResponseField name="fila" type="integer">
+  Row index of the monitored zone in the grid.
+</ResponseField>
+
+<ResponseField name="columna" type="integer">
+  Column index of the monitored zone in the grid.
+</ResponseField>
+
+<ResponseField name="cantidad" type="integer">
+  Number of people counted in the zone at this timestamp.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO-8601 datetime of the count record.
+</ResponseField>
+
+### Example
+
+```bash
+curl "http://localhost:8083/conteo/por-fecha?timestamp=2024-06-01T14:00:00"
+```
+
+---
+
+## GET /conteo/por-rango
+
+Returns all zone-count records whose timestamp falls within an inclusive date-time range.
+
+### Query parameters
+
+<ParamField query="desde" type="string" required>
+  ISO-8601 start datetime of the range (e.g. `2024-06-01T00:00:00`).
+</ParamField>
+
+<ParamField query="hasta" type="string" required>
+  ISO-8601 end datetime of the range (e.g. `2024-06-01T23:59:59`).
+</ParamField>
+
+### Response
+
+Returns a JSON array of `ConteoZona` objects.
+
+<ResponseField name="id" type="integer">
+  Auto-generated record identifier.
+</ResponseField>
+
+<ResponseField name="fila" type="integer">
+  Row index of the monitored zone.
+</ResponseField>
+
+<ResponseField name="columna" type="integer">
+  Column index of the monitored zone.
+</ResponseField>
+
+<ResponseField name="cantidad" type="integer">
+  Number of people counted in the zone.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO-8601 datetime of the count record.
+</ResponseField>
+
+### Example
+
+```bash
+curl "http://localhost:8083/conteo/por-rango?desde=2024-06-01T00:00:00&hasta=2024-06-01T23:59:59"
+```

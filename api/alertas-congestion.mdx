@@ -1,0 +1,68 @@
+---
+title: "Congestion alerts API"
+description: "REST endpoints for congestion alert events."
+---
+
+**Base URL**: `http://localhost:8082`
+
+---
+
+## GET /alertas/get
+
+Returns all congestion alert records whose creation timestamp falls within a specified date-time range.
+
+Congestion alerts are automatically created when crowd density in a monitored zone exceeds a threshold. Each record captures the zone grid coordinates, the person count at the time of the alert, and a server-side creation timestamp.
+
+### Query parameters
+
+<ParamField query="desde" type="string" required>
+  ISO-8601 start datetime of the range (e.g. `2024-06-01T00:00:00`). Must be URL-encoded.
+</ParamField>
+
+<ParamField query="hasta" type="string" required>
+  ISO-8601 end datetime of the range (e.g. `2024-06-01T23:59:59`). Must be URL-encoded.
+</ParamField>
+
+### Response
+
+Returns a JSON array of `AlertasCongestion` objects.
+
+<ResponseField name="id" type="integer">
+  Auto-generated alert identifier.
+</ResponseField>
+
+<ResponseField name="fila" type="integer">
+  Row index of the congested zone in the monitoring grid.
+</ResponseField>
+
+<ResponseField name="columna" type="integer">
+  Column index of the congested zone in the monitoring grid.
+</ResponseField>
+
+<ResponseField name="cantidad" type="integer">
+  Number of people detected in the zone when the alert was triggered.
+</ResponseField>
+
+<ResponseField name="fechaCreacion" type="string">
+  Server-side timestamp (DATETIME) of when the alert record was created. Set automatically on insert.
+</ResponseField>
+
+### Example
+
+```bash
+curl "http://localhost:8082/alertas/get?desde=2024-06-01T00:00:00&hasta=2024-06-01T23:59:59"
+```
+
+### Example response
+
+```json
+[
+  {
+    "id": 7,
+    "fila": 2,
+    "columna": 3,
+    "cantidad": 45,
+    "fechaCreacion": "2024-06-01T14:35:00.000+00:00"
+  }
+]
+```

@@ -1,0 +1,129 @@
+---
+title: "Weapon detection"
+description: "Detection of bladed weapons and firearms using a Roboflow-trained custom model with ByteTrack."
+---
+
+The weapon detection module uses a Roboflow-hosted custom model to identify bladed weapons and firearms in video footage. Detections are tracked across frames using ByteTrack and logged to a MySQL database with a cooldown mechanism to prevent alert floods.
+
+## Model
+
+| Property | Value |
+|---|---|
+| Provider | Roboflow |
+| Workspace | `m-qczea` |
+| Project | `weapon_detection_v2-rdpq3` |
+| Version | `2` |
+| Inference | Roboflow hosted API |
+
+## Weapon classes
+
+| Class ID | Label | Description |
+|---|---|---|
+| `0` | `arma_blanca` | Bladed weapon (knife, machete, etc.) |
+| `1` | `arma_fuego` | Firearm |
+
+Class name mapping is applied inside `insert_into_db()` before writing to the database.
+
+## How it works
+
+<Steps>
+  <Step title="Load model">
+    The Roboflow model is loaded at startup via the `roboflow` Python SDK. The same model project and version are used in both the Colab notebook (`weapon_detection_collab.py`) and the local runner (`weapon_detection_local/main.py`).
+  </Step>
+  <Step title="Frame inference">
+    Each video frame is submitted to `model.predict()` with the configured confidence and IOU thresholds. Results are converted to a `supervision.Detections` object via `sv.Detections.from_inference()`.
+  </Step>
+  <Step title="ByteTrack tracking">
+    Detections are passed to a `sv.ByteTrack()` tracker instance, which assigns persistent `tracker_id` integers across frames. This allows the cooldown logic to key on individual tracked objects.
+  </Step>
+  <Step title="Annotation">
+    Each detection is annotated with a bounding box and a label in the format `ID:{tracker_id} {class_name} {confidence:.2f}` using `sv.BoxAnnotator` and `sv.LabelAnnotator`.
+  </Step>
+  <Step title="Database alert with cooldown">
+    `insert_into_db()` is called for each tracked detection. A global timer (`last_global_alert_time`) prevents any new database insert within 60 seconds of the previous one, regardless of tracker ID.
+  </Step>
+</Steps>
+
+## Configuration
+
+```python weapon_detection_collab.py
+CONFIDENCE_THRESHOLD = 50    # Minimum detection confidence (%)
+IOU_THRESHOLD        = 0.5   # Non-maximum suppression overlap threshold
+COOLDOWN_SECONDS     = 60.0  # Minimum seconds between DB writes
+```
+
+<Note>
+  The local runner (`weapon_detection_local/main.py`) uses a lower confidence threshold of `30` and writes each annotated frame to disk as a JPEG before reading it back, since it does not use the `supervision` annotation pipeline.
+</Note>
+
+## Cooldown logic
+
+A single global timestamp (`last_global_alert_time`) gates all database writes. If a detection occurs within `COOLDOWN_SECONDS` of the last write, the insert is skipped:
+
+```python weapon_detection_collab.py
+def insert_into_db(track_id, class_name):
+    global last_global_alert_time
+    current_time = time.time()
+
+    tipo_arma = "arma_blanca" if str(class_name) == "0" else "arma_fuego"
+
+    time_since_last = current_time - last_global_alert_time
+    if time_since_last < COOLDOWN_SECONDS:
+        print(f" Cooldown activo. Ignorando ID {track_id}. Faltan {int(COOLDOWN_SECONDS - time_since_last)}s")
+        return
+
+    # ... connect and insert ...
+    last_global_alert_time = current_time
+```
+
+<Warning>
+  The cooldown is **global**, not per-tracker-ID. If two different weapons are detected simultaneously, only the first will trigger a database write. Adjust `COOLDOWN_SECONDS` or implement per-ID cooldown tracking if simultaneous multi-weapon scenarios are expected.
+</Warning>
+
+## Database schema
+
+```sql
+CREATE TABLE armas_deteccion (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    id_persona INT,          -- ByteTrack tracker_id
+    tipo_arma  VARCHAR(50)   -- 'arma_blanca' or 'arma_fuego'
+);
+```
+
+| Column | Description |
+|---|---|
+| `id_persona` | ByteTrack `tracker_id` for the detected object |
+| `tipo_arma` | Weapon type string, mapped from the raw class ID |
+
+## Annotation format
+
+The supervision annotators produce overlays directly on the video frame:
+
+```python weapon_detection_collab.py
+labels = []
+for tracker_id, class_name, confidence in zip(tracker_ids, class_names, confidences):
+    labels.append(f"ID:{tracker_id} {class_name} {confidence:.2f}")
+
+frame = box_annotator.annotate(scene=frame, detections=detections)
+frame = label_annotator.annotate(scene=frame, detections=detections, labels=labels)
+```
+
+Example label: `ID:4 arma_blanca 0.73`
+
+## Output
+
+| Variant | Output file |
+|---|---|
+| Colab (`weapon_detection_collab.py`) | `video_procesado_final.mp4` |
+| Local (`weapon_detection_local/main.py`) | `detectado2.mp4` (640×640) |
+
+The local variant resizes every frame to `640×640` before inference and after annotation to match the model's expected input resolution.
+
+## Combined pipeline
+
+The `armas_agresiones.py` script integrates weapon detection and pose-based aggression detection in a single video pass. In that pipeline, weapon events are written to an `alerta_arma` table (which also stores an `imagen_url` from ImgBB), and the cooldown timers for database writes and image uploads are managed separately:
+
+```python armas_agresiones.py
+COOLDOWN_DB  = 2.0   # Seconds between DB inserts
+COOLDOWN_IMG = 30.0  # Seconds between image uploads to ImgBB
+```

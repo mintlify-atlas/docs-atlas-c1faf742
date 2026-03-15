@@ -1,0 +1,119 @@
+---
+title: "Local quickstart"
+description: "Run Espacios Seguros IA detection scripts locally with a webcam or video file."
+---
+
+## Prerequisites
+
+Before running any detection scripts locally, make sure you have the following:
+
+- Python **3.13.3** or higher
+- pip packages: `ultralytics` and `deep_sort_realtime`
+- A machine with sufficient CPU or GPU resources (see warning below)
+
+<Warning>
+  Local execution is CPU/GPU intensive. Real-time processing of video sources can be demanding. A machine with a dedicated GPU is strongly recommended for smooth performance. Running on CPU alone may result in significant lag or dropped frames.
+</Warning>
+
+## Download the YOLO model
+
+Download the YOLOv8m model weights and place them in a `models/` folder at the project root.
+
+```bash
+# Create the models directory
+mkdir -p models
+
+# Download the model
+wget -P models/ https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8m.pt
+```
+
+Alternatively, download the file directly from the link below and move it to `models/`:
+
+**[Download yolov8m.pt](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8m.pt)**
+
+<Note>
+  Make sure the model filename in your script matches the filename in the `models/` directory. For example, if your script references `models/yolov8m.pt`, the downloaded file must be named accordingly.
+</Note>
+
+## Installation and setup
+
+<Steps>
+  <Step title="Install Python">
+    Download and install Python 3.13.3 or higher from [python.org](https://www.python.org/downloads/). Verify your installation:
+
+    ```bash
+    python --version
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install the required Python packages using pip:
+
+    ```bash
+    pip install ultralytics deep_sort_realtime
+    ```
+  </Step>
+
+  <Step title="Place the YOLO model">
+    Ensure the downloaded `yolov8m.pt` file is inside the `models/` folder at the project root:
+
+    ```
+    project-root/
+    ├── models/
+    │   └── yolov8m.pt
+    ├── google_colab/
+    └── ...
+    ```
+  </Step>
+
+  <Step title="Run a detection script">
+    Navigate to the project root in your terminal and run the desired script:
+
+    ```bash
+    python nombre_del_archivo.py
+    ```
+
+    A window will open showing the real-time processed video output.
+  </Step>
+</Steps>
+
+## Available scripts
+
+The following detection scripts are available in the `google_colab/` directory and can also be run locally:
+
+| Script | Description |
+|---|---|
+| `agresiones.py` | Aggression detection via pose estimation |
+| `armas_agresiones.py` | Combined weapon and aggression detection |
+| `conteo_area.py` | Zone-based person counting |
+| `deteccion_comportamiento.py` | Behavior detection |
+| `trash_segmentation_video.py` | Trash detection on video |
+| `weapon_detection_collab.py` | Weapon detection using a Roboflow model |
+
+## Running a specific script
+
+<CodeGroup>
+```bash Aggression detection
+python google_colab/agresiones.py
+```
+
+```bash Weapon + aggression detection
+python google_colab/armas_agresiones.py
+```
+
+```bash Zone-based person counting
+python google_colab/conteo_area.py
+```
+
+```bash Behavior detection
+python google_colab/deteccion_comportamiento.py
+```
+
+```bash Trash detection (video)
+python google_colab/trash_segmentation_video.py
+```
+
+```bash Weapon detection (Roboflow)
+python google_colab/weapon_detection_collab.py
+```
+</CodeGroup>

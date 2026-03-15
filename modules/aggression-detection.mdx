@@ -1,0 +1,159 @@
+---
+title: "Aggression detection"
+description: "Real-time detection of physical altercations using YOLO pose estimation and movement analysis."
+---
+
+The aggression detection module analyzes pose keypoints from pairs of people in each video frame to identify physical altercations. It runs entirely on-device using a local YOLO pose model — no external API call is required.
+
+## Model
+
+| Property | Value |
+|---|---|
+| Model | `yolo11x-pose.pt` |
+| Variant | YOLO11x-pose (extra-large pose estimation) |
+| Confidence threshold | `0.4` |
+| Input | MP4 video file |
+| Output | Annotated MP4 with red bounding boxes and alert overlay |
+
+## How it works
+
+<Steps>
+  <Step title="Pose estimation">
+    Each frame is passed to `YOLO11x-pose`, which returns a set of 17 keypoints per detected person, along with bounding boxes.
+  </Step>
+  <Step title="Keypoint extraction">
+    For every detected person, four keypoints are extracted:
+
+    | Index | Body part |
+    |---|---|
+    | `0` | Head |
+    | `2` | Torso (used as person center) |
+    | `9` | Right hand |
+    | `10` | Left hand |
+  </Step>
+  <Step title="History tracking">
+    Each person is identified by their bounding box coordinates. Hand and torso positions are appended to rolling `deque` buffers with a maximum length of **8 frames**, enabling speed calculations across recent movement history.
+  </Step>
+  <Step title="Pairwise analysis">
+    Every pair of detected people `(i, j)` is evaluated by the `detect_aggression()` function. If the torso distance between the pair is greater than 30 pixels, the pair is immediately skipped — no further analysis is performed.
+  </Step>
+  <Step title="Aggression classification">
+    If the pair is within proximity range, four aggression conditions are evaluated independently. Any single condition being true triggers an aggression event.
+  </Step>
+  <Step title="Database insert">
+    On detection, an event record is written to the `agresiones_detectadas` table with full metadata including frame number, involved person IDs, aggression types, distances, and speeds.
+  </Step>
+</Steps>
+
+## Detection criteria
+
+All conditions are evaluated inside `detect_aggression()`. The function returns `True` if **any one** of the following is met:
+
+<CardGroup cols={2}>
+  <Card title="Head strike (golpe_cabeza)" icon="hand-fist">
+    Either hand (right or left) of person `i` is within **60 pixels** of person `j`'s head keypoint.
+  </Card>
+  <Card title="Aggressive movement (movimiento_agresivo)" icon="bolt">
+    `hand_speed1 > 10` AND `hand_speed2 > 5`, combined with torso movement > 3 px/frame and proximity < 30 px.
+  </Card>
+  <Card title="Push (empujon)" icon="person-walking-arrow-right">
+    Torso speed of either person exceeds **10 pixels per frame** on average across the history window.
+  </Card>
+  <Card title="Grab/pull (jaloneo)" icon="link">
+    A head strike condition is true AND at least one person has `hand_speed > 5`.
+  </Card>
+</CardGroup>
+
+<Note>
+  Proximity is measured between torso keypoints (index 2) of each person. Pairs with torso distance > 30 px are excluded from all further checks.
+</Note>
+
+## `detect_aggression` function signature
+
+```python agresiones.py
+def detect_aggression(pose1, pose2, hand_speed1, hand_speed2, torso_hist1, torso_hist2):
+    """
+    Evaluate whether two people are engaged in a physical altercation.
+
+    Args:
+        pose1 (list): Keypoints for person 1 as (x, y) tuples, indexed 0–16.
+        pose2 (list): Keypoints for person 2 as (x, y) tuples, indexed 0–16.
+        hand_speed1 (float): Mean hand displacement (px/frame) for person 1.
+        hand_speed2 (float): Mean hand displacement (px/frame) for person 2.
+        torso_hist1 (deque): Torso position history for person 1 (maxlen=8).
+        torso_hist2 (deque): Torso position history for person 2 (maxlen=8).
+
+    Returns:
+        bool: True if any aggression condition is met.
+    """
+```
+
+## Speed calculation
+
+Hand and torso speeds are computed as the mean Euclidean displacement between consecutive positions in the deque history:
+
+```python agresiones.py
+def hand_speed(history):
+    if len(history) < 2:
+        return 0
+    speeds = [euclidean(history[i], history[i+1]) for i in range(len(history)-1)]
+    return np.mean(speeds)
+```
+
+The `torso_speed()` function uses identical logic applied to the torso position history.
+
+## Database schema
+
+Detected events are inserted into the `agresiones_detectadas` table on every positive frame:
+
+```sql
+CREATE TABLE agresiones_detectadas (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    timestamp       DATETIME,
+    video_nombre    VARCHAR(255),
+    frame_num       INT,
+    cant_personas   INT,
+    id_involucrados TEXT,        -- e.g. "(x1,y1,x2,y2),(x1,y1,x2,y2)"
+    tipo_agresion   VARCHAR(255),-- comma-separated: golpe_cabeza,empujon,...
+    distancia_entre FLOAT,       -- torso-to-torso px distance
+    velocidad_manos TEXT,        -- e.g. "12.4,6.1"
+    velocidad_torsos TEXT        -- e.g. "11.0,3.2"
+);
+```
+
+| Column | Description |
+|---|---|
+| `timestamp` | Wall-clock time of the detection event |
+| `video_nombre` | Source video filename |
+| `frame_num` | Frame index within the video |
+| `cant_personas` | Total persons detected in the frame |
+| `id_involucrados` | Bounding box coordinates of the two people involved |
+| `tipo_agresion` | Comma-separated list of matched aggression types |
+| `distancia_entre` | Torso-to-torso pixel distance at time of detection |
+| `velocidad_manos` | Mean hand speeds for each person |
+| `velocidad_torsos` | Mean torso speeds for each person |
+
+## Configuration constants
+
+```python agresiones.py
+conf             = 0.4   # YOLO detection confidence threshold
+deque maxlen     = 8     # Frames of history kept per person
+proximity_limit  = 30    # Max torso distance (px) to enter aggression check
+head_strike_dist = 60    # Max hand-to-head distance (px) for golpe_cabeza
+```
+
+## Output
+
+The module writes a processed video to `procesado_{input_video}`:
+
+- Persons involved in a detected aggression receive a **red bounding box** (`(0, 0, 255)`, thickness 3).
+- The text `agresion detectada` is drawn in the top-left corner of any frame where an aggression is detected.
+- Frames with no aggression are written unmodified.
+
+<Warning>
+  The person identifier used for history tracking is the bounding box tuple `(x1, y1, x2, y2)`. This means re-identification is lost if a person leaves and re-enters the frame. For persistent tracking across occlusions, integrate a tracker such as ByteTrack.
+</Warning>
+
+## Combined aggression and weapon pipeline
+
+The `armas_agresiones.py` script runs both the weapon detection model and the pose-based aggression model on the same video stream in a single pass. In that pipeline, the aggression logic uses a scale-normalized variant (`detect_aggression_cctv`) that accounts for camera distance by dividing speeds and distances by the shoulder width of each person.

@@ -1,0 +1,123 @@
+---
+title: "Trash detection"
+description: "Segmentation-based detection and monitoring of waste accumulation in public spaces."
+---
+
+The trash detection module uses a fine-tuned YOLOv8 detection model to identify and monitor waste accumulation in public space footage. It supports both video stream processing and single-image prediction.
+
+## Model
+
+| Property | Value |
+|---|---|
+| Base architecture | YOLOv8m (medium) |
+| Weights | `runs/detect/yolov8m_entrenamiento8/weights/best.pt` |
+| Training run | `yolov8m_entrenamiento8` (8th training iteration) |
+| Task | Object detection with bounding box output |
+| Input (video) | MP4 video file |
+| Input (image) | JPEG/PNG image file |
+
+<Note>
+  The weights file path (`runs/detect/yolov8m_entrenamiento8/weights/best.pt`) reflects a locally trained model. Ensure this path is correct relative to your working directory before running either script.
+</Note>
+
+## How it works
+
+<Tabs>
+  <Tab title="Video processing">
+    The `trash_segmentation_video.py` script processes a video frame by frame using `model.track()` with `persist=True`, which maintains object identity across frames via ByteTrack:
+
+    ```python trash_segmentation_video.py
+    model = YOLO('runs/detect/yolov8m_entrenamiento8/weights/best.pt')
+    cap = cv2.VideoCapture('Service Project/images/video/Trash_Segmentation.mp4')
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        results = model.track(frame, persist=True)
+        annotated = results[0].plot()
+        cv2.imshow('Detección de basura', annotated)
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    ```
+
+    Press `q` to stop playback early. The annotated frame is rendered to a live display window — no output video file is written in this mode.
+  </Tab>
+  <Tab title="Image prediction">
+    The `trash_segmentation_prediction.py` script runs a single inference pass on a still image:
+
+    ```python trash_segmentation_prediction.py
+    from ultralytics import YOLO
+
+    model = YOLO('runs/detect/yolov8m_entrenamiento8/weights/best.pt')
+    results = model(
+        'Service Project/images/prediction/predictionImage.jpg',
+        conf=0.25
+    )
+    ```
+
+    | Configuration | Value |
+    |---|---|
+    | Confidence threshold | `0.25` |
+    | Input | Single JPEG image |
+    | Output | In-memory `Results` object (no file saved by default) |
+  </Tab>
+</Tabs>
+
+## Detection output
+
+Both scripts use `results[0].plot()` (or the `Results` object directly) to produce annotated output. The `plot()` method renders:
+
+- Bounding boxes around detected waste objects
+- Class labels and confidence scores on each box
+- Tracked object IDs (video mode only, from `persist=True`)
+
+<Steps>
+  <Step title="Load model">
+    Load the custom-trained weights with `YOLO('path/to/best.pt')`.
+  </Step>
+  <Step title="Run inference">
+    Call `model.track(frame, persist=True)` for video or `model(image, conf=0.25)` for still images.
+  </Step>
+  <Step title="Visualize results">
+    Call `results[0].plot()` to get an annotated NumPy array, then display with `cv2.imshow()` or save with `cv2.imwrite()`.
+  </Step>
+</Steps>
+
+## Running the scripts
+
+<Tabs>
+  <Tab title="Video">
+    ```bash
+    python trash_segmentation_video.py
+    ```
+
+    Ensure the input video path `'Service Project/images/video/Trash_Segmentation.mp4'` exists relative to the working directory, or update it in the script before running.
+  </Tab>
+  <Tab title="Image">
+    ```bash
+    python trash_segmentation_prediction.py
+    ```
+
+    Update `'Service Project/images/prediction/predictionImage.jpg'` to point to the image you want to analyze.
+  </Tab>
+</Tabs>
+
+## Database integration
+
+<Note>
+  The current trash detection scripts do not write to a database. Detection results are rendered visually only. If you need to persist trash detection events, add an insert call similar to the pattern used in the aggression or weapon detection modules.
+</Note>
+
+## Differences from other modules
+
+| Feature | Trash detection | Aggression detection | Weapon detection |
+|---|---|---|---|
+| Model type | Detection (bounding box) | Pose estimation | Custom Roboflow |
+| Tracking | ByteTrack via `persist=True` | Box-based identity | ByteTrack via `sv` |
+| DB writes | None | Yes | Yes |
+| Output | Live display window | Annotated video file | Annotated video file |
+| Alert cooldown | None | Per-frame insert | 60-second global |

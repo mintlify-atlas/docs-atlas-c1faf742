@@ -1,0 +1,42 @@
+---
+title: "Person detections API"
+description: "REST endpoints for querying detected persons statistics."
+---
+
+**Base URL**: `http://localhost:8084`
+
+---
+
+## GET /deteccion/por-dia-semana
+
+Returns the total number of person detections grouped by day of the week.
+
+Each entry in the underlying `personas_detectadas` table stores a `personaId` (the DeepSORT tracker ID) and a `timestampDetectado`. This endpoint aggregates those records and returns a count per weekday.
+
+### Response
+
+Returns a JSON object where each key is a day name and the value is the detection count.
+
+<ResponseField name="{diaSemana}" type="integer">
+  Number of person detections recorded on that day of the week. Keys are day names (e.g. `"MONDAY"`, `"TUESDAY"`, etc.).
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8084/deteccion/por-dia-semana
+```
+
+### Example response
+
+```json
+{
+  "MONDAY": 134,
+  "TUESDAY": 98,
+  "WEDNESDAY": 210,
+  "THURSDAY": 175,
+  "FRIDAY": 301,
+  "SATURDAY": 88,
+  "SUNDAY": 42
+}
+```

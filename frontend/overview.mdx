@@ -1,0 +1,120 @@
+---
+title: "Frontend overview"
+description: "HTML/JavaScript dashboard for managing detections, alerts, and user roles in Espacios Seguros IA."
+---
+
+The frontend is a multi-page **HTML/Bootstrap 5** application with no build step. Each page is a self-contained HTML file that uses the Fetch API to communicate with the backend microservices. Pages can be served as static files or opened directly in a browser.
+
+## Technology
+
+| Dependency | Version | Purpose |
+|---|---|---|
+| Bootstrap | 5.3.3 | Layout and UI components |
+| Chart.js | latest (CDN) | Bar, line, pie, radar, doughnut, and grouped charts |
+| Vanilla JavaScript | — | Fetch API calls, DOM manipulation, session management |
+
+<Note>
+No bundler or package manager is required. All dependencies are loaded from CDN. To run the frontend, open any HTML file in a browser or serve the directory with any static file server.
+</Note>
+
+## Pages
+
+<Columns cols={2}>
+  <Card title="index.html" icon="log-in">
+    Login page. Authenticates users against `gestion-usuarios-service` on port 8081 and routes them by role.
+  </Card>
+  <Card title="admin_panel.html" icon="shield">
+    Main admin dashboard. Lists all users, creates new accounts, and updates roles, statuses, and passwords.
+  </Card>
+  <Card title="agresiones_panel.html" icon="triangle-alert">
+    Aggression detection history. Displays a bar chart and grouped alert list filtered by date range.
+  </Card>
+  <Card title="alertas.html" icon="bell">
+    Congestion alert feed. Renders a time-series line chart and a list of zones where occupancy exceeded the threshold.
+  </Card>
+  <Card title="conteo_zona.html" icon="map-pin">
+    Zone counting dashboard. Bar chart of person counts per grid zone over a configurable time window.
+  </Card>
+  <Card title="deteccion.html" icon="activity">
+    Weekly activity view. Bar chart of total detections per day of the week for a given date range.
+  </Card>
+  <Card title="ip_cam.html" icon="video">
+    IP camera live view. Embeds one or more video streams (MJPEG `<img>` or HTML5 `<video>`) from connected cameras.
+  </Card>
+  <Card title="trash_dashboard.html" icon="trash-2">
+    Trash detection analytics. Multi-chart carousel (bar, pie, line, radar, doughnut, grouped) fed from the trash-detection service on port 8080.
+  </Card>
+</Columns>
+
+## Authentication
+
+The login page (`index.html`) sends credentials to the user-management service and stores the returned user object in `sessionStorage`.
+
+```javascript index.html
+fetch('http://localhost:8081/usuarios/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: nombre, password: password }),
+})
+  .then(res => {
+    if (!res.ok) throw new Error('Credenciales incorrectas');
+    return res.json();
+  })
+  .then(usuario => {
+    sessionStorage.setItem("usuario", JSON.stringify(usuario));
+
+    if (usuario.rol === 0) {
+      window.location.href = "admin_panel.html";
+    } else {
+      window.location.href = "usuario_panel.html";
+    }
+  })
+  .catch(err => {
+    loginError.textContent = err.message;
+    loginError.style.display = 'block';
+  });
+```
+
+### Role routing
+
+| Role value | Destination after login |
+|---|---|
+| `0` | `admin_panel.html` |
+| Any other value | `usuario_panel.html` |
+
+<Info>
+Every protected page checks `sessionStorage` on load. If no valid session exists, or if the user's role is not `0`, the page immediately redirects to `index.html`.
+</Info>
+
+## Session management
+
+The user object returned by the login endpoint is serialised and stored under the key `"usuario"` in `sessionStorage`. It is read back on every protected page:
+
+```javascript
+const usuario = JSON.parse(sessionStorage.getItem("usuario"));
+if (!usuario || usuario.rol !== 0) {
+  window.location.href = "index.html";
+}
+```
+
+Logging out clears the entire `sessionStorage` and redirects to the login page:
+
+```javascript
+function logout() {
+  sessionStorage.clear();
+  window.location.href = 'index.html';
+}
+```
+
+## Navigation
+
+All pages share a consistent Bootstrap offcanvas sidebar (dark background) with the same set of links:
+
+- Usuarios → `admin_panel.html`
+- Alertas congestión → `alertas.html`
+- Conteo por zona → `conteo_zona.html`
+- Actividad → `deteccion.html`
+- Agresiones detectadas → `agresiones_panel.html`
+- Cerrar Sesión (calls `logout()`)
+
+Several pages also display a **Cámara IP en vivo** button in the navbar that links directly to `ip_cam.html`.

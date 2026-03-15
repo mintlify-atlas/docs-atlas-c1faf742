@@ -1,0 +1,211 @@
+---
+title: "Admin panel"
+description: "Role-based administration panel for viewing detections and managing users."
+---
+
+The admin panel is the central hub for users with `rol === 0`. It provides user management and links to all monitoring dashboards. Non-admin users attempting to access any of these pages are immediately redirected to `index.html`.
+
+<Info>
+All pages listed here enforce the same guard at the top of their script block: `if (!usuario || usuario.rol !== 0) window.location.href = "index.html";`
+</Info>
+
+## User management (`admin_panel.html`)
+
+The admin panel displays two sections: a form to create new users and a table of all active users.
+
+### Creating a user
+
+The creation form posts to the `gestion-usuarios-service`:
+
+```javascript admin_panel.html
+const nuevoUsuario = {
+  nombre: document.getElementById("newNombre").value,
+  password: document.getElementById("newPassword").value,
+  rol: parseInt(document.getElementById("newRol").value),
+  status: true,
+};
+
+const res = await fetch("http://localhost:8081/usuarios/registro", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(nuevoUsuario),
+});
+```
+
+Available role values are `0` (Admin) and `1` (Usuario común).
+
+### Active users table
+
+The users table is populated on load and after every create action by calling `GET http://localhost:8081/usuarios/show`. Each row renders the user's ID, name, role selector, active status checkbox, and a password reset button.
+
+```javascript admin_panel.html
+async function cargarUsuarios() {
+  const res = await fetch("http://localhost:8081/usuarios/show");
+  const usuarios = await res.json();
+  // renders rows into #usersTable tbody
+}
+```
+
+### Inline row actions
+
+<AccordionGroup>
+  <Accordion title="Change role">
+    A `<select>` dropdown on each row fires a `PUT` request on change:
+
+    ```javascript
+    await fetch(`http://localhost:8081/usuarios/${id}/rol`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nuevoRol),
+    });
+    ```
+  </Accordion>
+  <Accordion title="Toggle active status">
+    A checkbox fires a `PUT` request on change:
+
+    ```javascript
+    await fetch(`http://localhost:8081/usuarios/${id}/status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nuevoStatus),
+    });
+    ```
+  </Accordion>
+  <Accordion title="Reset password">
+    A button opens a `prompt()` dialog and sends the new password:
+
+    ```javascript
+    await fetch(`http://localhost:8081/usuarios/${id}/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nuevaPass),
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+The currently logged-in user's row is annotated with a `Tú` badge (Bootstrap `bg-primary`). The admin can still change their own role or status from this table.
+</Note>
+
+## Aggression detection history (`agresiones_panel.html`)
+
+This page fetches all aggression records and displays a bar chart and a grouped alert list filtered by a date range selected by the user.
+
+**Data source:** `GET http://localhost:8085/agresiones`
+
+```javascript agresiones_panel.html
+async function cargarDatos() {
+  const res = await fetch("http://localhost:8085/agresiones");
+  agresiones = await res.json();
+  filtrarYMostrar();
+}
+```
+
+The date range defaults to today from `00:00` to `23:59`. Records are filtered client-side after the full dataset is retrieved.
+
+### Chart
+
+A Chart.js bar chart (`#graficoTipos`) groups records by `tipoAgresion` and counts occurrences for the selected window.
+
+### Alert list
+
+Events within 2 minutes of each other are merged into a single incident group. Each group shows:
+
+- Start and end timestamps
+- Number of individuals involved
+- Badge listing the aggression types detected
+
+```javascript agresiones_panel.html
+// consecutive events within 2 minutes are merged
+const diferenciaMin = (ts - actualGrupo.fin) / 1000 / 60;
+if (diferenciaMin <= 2) {
+  actualGrupo.fin = ts;
+  actualGrupo.tipoAgresion.add(actual.tipoAgresion);
+}
+```
+
+## Zone counting dashboard (`conteo_zona.html`)
+
+This page visualises person counts per grid zone over a configurable date/time range.
+
+**Data source:** `GET http://localhost:8083/conteo/por-rango?desde=<datetime>&hasta=<datetime>`
+
+```javascript conteo_zona.html
+const response = await fetch(
+  `http://localhost:8083/conteo/por-rango?desde=${desde}&hasta=${hasta}`
+);
+const data = await response.json();
+```
+
+Each record contains `fila`, `columna`, `cantidad`, and `timestamp` fields. The UI identifies zones by the pattern `F<fila>C<columna>` (e.g. `F1C2`). A zone selector dropdown is populated dynamically from the returned data, allowing the chart to be filtered to a single zone.
+
+## Weekly activity view (`deteccion.html`)
+
+This page shows the total number of detections aggregated by day of the week for a user-selected date range.
+
+**Data source:** `GET http://localhost:8084/deteccion/por-dia-semana?fechaInicio=<date>&fechaFin=<date>`
+
+```javascript deteccion.html
+fetch(`http://localhost:8084/deteccion/por-dia-semana?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`)
+  .then(response => response.json())
+  .then(data => {
+    const valores = diasOrdenados.map(dia => data[dia] || 0);
+    // renders bar chart
+  });
+```
+
+Days are rendered in fixed order: Monday through Sunday. Bar opacity scales with detection volume to provide a visual heat-map effect.
+
+## Trash detection analytics (`trash_dashboard.html`)
+
+This page consumes multiple endpoints from the trash-detection service and renders a carousel of six charts.
+
+**Base URL:** `http://localhost:8080/api`
+
+| Endpoint | Used by |
+|---|---|
+| `GET /api/detections` | Raw detection records (summary table) |
+| `GET /api/totales` | Total count per waste label (bar chart) |
+| `GET /api/proporciones` | Proportional breakdown (pie chart) |
+| `GET /api/por-fecha` | Detections over time (line chart) |
+| `GET /api/por-dia-semana` | Counts by day of week (radar chart) |
+| `GET /api/conteo/entre-semana` | Weekday total (doughnut chart) |
+| `GET /api/conteo/fin-semana` | Weekend total (doughnut chart) |
+| `GET /api/conteo/desecho-dia` | Waste type × day matrix (grouped bar chart) |
+
+```javascript js/dashboard.js
+const apiBase = 'http://localhost:8080/api';
+
+async function fetchTotals() {
+  const res = await fetch(`${apiBase}/totales`);
+  return await res.json();
+}
+
+async function fetchProportions() {
+  const res = await fetch(`${apiBase}/proporciones`);
+  return await res.json();
+}
+```
+
+All chart data is fetched in parallel on `DOMContentLoaded`. A dynamic table above the carousel displays the raw detection records returned by `/api/detections`.
+
+## Session management
+
+Session state is read from `sessionStorage` under the key `"usuario"`. The stored object contains at minimum:
+
+| Field | Type | Description |
+|---|---|---|
+| `nombre` | string | Display name shown in the navbar greeting |
+| `rol` | number | `0` for admin, `1` for standard user |
+
+Logging out from any page calls:
+
+```javascript
+function logout() {
+  sessionStorage.clear();
+  window.location.href = 'index.html';
+}
+```
+
+`sessionStorage` is tab-scoped and does not persist across browser sessions.

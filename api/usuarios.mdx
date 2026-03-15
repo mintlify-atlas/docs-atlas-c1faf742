@@ -1,0 +1,232 @@
+---
+title: "User management API"
+description: "REST endpoints for user registration, authentication, and role management."
+---
+
+**Base URL**: `http://localhost:8081`
+
+---
+
+## POST /usuarios/registro
+
+Registers a new user account.
+
+### Request body
+
+<ParamField body="nombre" type="string" required>
+  Username for the new account.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Password for the new account.
+</ParamField>
+
+<ParamField body="rol" type="integer" required>
+  Role assigned to the user (e.g. `0` for standard, `1` for admin).
+</ParamField>
+
+<ParamField body="status" type="boolean" required>
+  Whether the account is active on creation.
+</ParamField>
+
+### Response
+
+Returns a plain-text confirmation message on success, or an error message on failure.
+
+<ResponseField name="body" type="string">
+  Success or error message string.
+</ResponseField>
+
+### Example
+
+```bash
+curl -X POST http://localhost:8081/usuarios/registro \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "jdoe", "password": "s3cr3t", "rol": 0, "status": true}'
+```
+
+---
+
+## POST /usuarios/login
+
+Authenticates a user and returns the full `Usuario` object on success.
+
+### Request body
+
+<ParamField body="nombre" type="string" required>
+  The username to authenticate.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's password.
+</ParamField>
+
+### Response
+
+Returns the `Usuario` object on success (`200 OK`) or `401 Unauthorized` on failure.
+
+<ResponseField name="id" type="integer">
+  Auto-generated user identifier.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  The authenticated user's username.
+</ResponseField>
+
+<ResponseField name="password" type="string">
+  The stored password value.
+</ResponseField>
+
+<ResponseField name="rol" type="integer">
+  The user's role level.
+</ResponseField>
+
+<ResponseField name="status" type="boolean">
+  Whether the account is currently active.
+</ResponseField>
+
+### Example
+
+```bash
+curl -X POST http://localhost:8081/usuarios/login \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "jdoe", "password": "s3cr3t"}'
+```
+
+---
+
+## GET /usuarios/show
+
+Returns a list of all active user accounts.
+
+### Response
+
+Returns a JSON array of `Usuario` objects.
+
+<ResponseField name="id" type="integer">
+  User identifier.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Username.
+</ResponseField>
+
+<ResponseField name="password" type="string">
+  Stored password value.
+</ResponseField>
+
+<ResponseField name="rol" type="integer">
+  User role level.
+</ResponseField>
+
+<ResponseField name="status" type="boolean">
+  Account active status.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8081/usuarios/show
+```
+
+---
+
+## PUT /usuarios/{id}/password
+
+Updates the password for the specified user.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  The ID of the user whose password should be updated.
+</ParamField>
+
+### Request body
+
+Send the new password as a raw string in the request body.
+
+<ParamField body="body" type="string" required>
+  The new plain-text password.
+</ParamField>
+
+### Response
+
+<ResponseField name="body" type="string">
+  `"Contraseña actualizada con exito"` on success, or `"Usuario no encontrado"` with status `404`.
+</ResponseField>
+
+### Example
+
+```bash
+curl -X PUT http://localhost:8081/usuarios/1/password \
+  -H "Content-Type: application/json" \
+  -d '"newP@ssw0rd"'
+```
+
+---
+
+## PUT /usuarios/{id}/rol
+
+Updates the role for the specified user.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  The ID of the user whose role should be changed.
+</ParamField>
+
+### Request body
+
+Send the new role as a raw integer in the request body.
+
+<ParamField body="body" type="integer" required>
+  The new role value.
+</ParamField>
+
+### Response
+
+<ResponseField name="body" type="string">
+  `"Rol actualizado con exito"` on success, or `"Usuario no encontrado"` with status `404`.
+</ResponseField>
+
+### Example
+
+```bash
+curl -X PUT http://localhost:8081/usuarios/1/rol \
+  -H "Content-Type: application/json" \
+  -d '1'
+```
+
+---
+
+## PUT /usuarios/{id}/status
+
+Updates the active status for the specified user.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  The ID of the user whose status should be changed.
+</ParamField>
+
+### Request body
+
+Send the new status as a raw boolean in the request body.
+
+<ParamField body="body" type="boolean" required>
+  The new account status (`true` = active, `false` = inactive).
+</ParamField>
+
+### Response
+
+<ResponseField name="body" type="string">
+  `"Status actualizado con exito"` on success, or `"Usuario no encontrado"` with status `404`.
+</ResponseField>
+
+### Example
+
+```bash
+curl -X PUT http://localhost:8081/usuarios/1/status \
+  -H "Content-Type: application/json" \
+  -d 'false'
+```

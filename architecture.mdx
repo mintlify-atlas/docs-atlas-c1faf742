@@ -1,0 +1,180 @@
+---
+title: "System architecture"
+description: "Overview of the three-layer architecture: AI detection, microservices backend, and web frontend."
+---
+
+Espacios Seguros IA is structured in three independent layers that communicate through a shared MySQL database and REST APIs. Each layer can be developed and scaled independently.
+
+## Architecture overview
+
+```
+┌─────────────────────────────────────────────┐
+│              AI Layer (Python)               │
+│  YOLO + DeepSORT detection scripts          │
+│  Local execution or Google Colab            │
+└───────────────────┬─────────────────────────┘
+                    │ writes detections
+                    ▼
+┌─────────────────────────────────────────────┐
+│           MySQL Database (port 3307)         │
+│  Shared database: servicio                  │
+└───────────────────┬─────────────────────────┘
+                    │ reads via JPA
+                    ▼
+┌─────────────────────────────────────────────┐
+│      Backend Layer (Spring Boot)            │
+│  5 microservices, each on its own port      │
+└───────────────────┬─────────────────────────┘
+                    │ REST API (HTTP)
+                    ▼
+┌─────────────────────────────────────────────┐
+│         Frontend Layer (HTML/JS)            │
+│  Role-based dashboard, alerts, panels       │
+└─────────────────────────────────────────────┘
+```
+
+<CardGroup cols={2}>
+  <Card title="AI layer" icon="brain">
+    Python scripts using YOLOv8/YOLO11 and DeepSORT. Run locally with a webcam or video file, or on Google Colab for cloud-based processing. Writes detection events directly to MySQL.
+  </Card>
+  <Card title="Backend layer" icon="server">
+    Five Spring Boot microservices, one per detection domain. Each service connects to the shared MySQL database and exposes a REST API. Containerized with Docker Compose.
+  </Card>
+  <Card title="Database layer" icon="database">
+    A single MySQL 8 instance (database: `servicio`) shared by all microservices. Detection scripts insert rows; Spring Boot services read and expose them.
+  </Card>
+  <Card title="Frontend layer" icon="browser">
+    HTML and JavaScript pages served statically. Calls the microservice REST APIs directly from the browser to display dashboards, incident history, and alerts.
+  </Card>
+</CardGroup>
+
+---
+
+## Microservices
+
+All microservices run on the `micro-red` Docker bridge network and share the `servicio` MySQL database. The host ports below are what you expose to the outside; each container listens internally on port 8080.
+
+| Service | Container name | Host port | Responsibility |
+|---|---|---|---|
+| MySQL 8 | `mysql-db` | `3307` | Shared relational database for all services |
+| User management | `gestion-usuarios-service` | `8081` | Authentication and role management |
+| Congestion alerts | `alerta-congestion-service` | `8082` | Grid-based crowd congestion alerts |
+| Zone counting | `conteo-zona-service` | `8083` | Per-zone person count over time |
+| People detected | `personas_detectadas` | `8084` | Unique person detection log |
+| Aggression detection | `agresiones-service` | `8085` | Fight and aggression event records |
+
+<Note>
+The `agresionesArmas` service (weapon alerts) and `basura-deteccion-service` (trash detection) exist in the source tree but are not included in the current `docker-compose.yml`. They can be added to the compose file following the same pattern as the services above.
+</Note>
+
+---
+
+## Data flow
+
+<Steps>
+  <Step title="AI script processes video">
+    A Python detection script (running locally or on Google Colab) reads a video file or live camera feed frame by frame. YOLO performs object detection; DeepSORT assigns persistent tracking IDs to each detected person.
+  </Step>
+  <Step title="Detection events written to MySQL">
+    When the script detects an incident — an aggression, a weapon, a congested zone, or a new person — it opens a direct MySQL connection and inserts a row into the appropriate table in the `servicio` database.
+  </Step>
+  <Step title="Spring Boot microservices read the data">
+    Each Spring Boot microservice uses Spring Data JPA to query its corresponding table. The microservices are stateless — they read what the Python scripts write and expose the data via REST endpoints.
+  </Step>
+  <Step title="Frontend consumes REST APIs">
+    The HTML/JavaScript frontend calls each microservice's REST API directly from the browser. Pages like `agresiones_panel.html`, `alertas.html`, and `conteo_zona.html` fetch detection records and render them in tables and charts.
+  </Step>
+</Steps>
+
+<Info>
+The AI scripts and Spring Boot services are deliberately decoupled. The scripts do not call any API — they write to MySQL directly. This means detection can run without the microservices being online, and the microservices can be queried independently of whether a detection script is running.
+</Info>
+
+---
+
+## Technology stack
+
+<CardGroup cols={2}>
+  <Card title="AI / detection" icon="python">
+    **Python 3.13+** — detection scripts
+
+    **Ultralytics YOLOv8 / YOLO11** — object detection and pose estimation
+
+    **deep_sort_realtime** — multi-object tracking
+
+    **mysql-connector-python** — direct database writes
+
+    **Google Colab** — optional cloud execution environment
+  </Card>
+  <Card title="Backend" icon="leaf">
+    **Java 17+ / Spring Boot 3** — microservice framework
+
+    **Spring Data JPA / Hibernate** — ORM and database access
+
+    **Spring Security** — endpoint authentication
+
+    **MySQL 8** — relational database
+
+    **Docker / Docker Compose** — containerization and orchestration
+  </Card>
+  <Card title="Frontend" icon="code">
+    **HTML5 / CSS3** — page structure and styling
+
+    **JavaScript (vanilla)** — API calls and DOM rendering
+
+    **REST (HTTP/JSON)** — communication with Spring Boot services
+
+    Pages: `index.html`, `admin_panel.html`, `agresiones_panel.html`, `alertas.html`, `conteo_zona.html`, `deteccion.html`, `ip_cam.html`, `trash_dashboard.html`
+  </Card>
+  <Card title="Infrastructure" icon="docker">
+    **Docker Compose** — single-command stack deployment
+
+    **Bridge network (`micro-red`)** — isolated container networking
+
+    **Named volume (`mysql-data`)** — persistent database storage
+
+    All Spring Boot services use the same `SPRING_DATASOURCE_URL` pointing to the `mysql-db` container on the internal network.
+  </Card>
+</CardGroup>
+
+---
+
+## Database schema
+
+All tables live in the `servicio` MySQL database. Detection scripts insert rows directly; Spring Boot microservices read them via JPA entities.
+
+| Table | Written by | Read by service | Description |
+|---|---|---|---|
+| `agresiones_detectadas` | `agresiones.py` | `agresiones-service` (8085) | Aggression events with frame number, person IDs, type, proximity, and movement speeds |
+| `armas_deteccion` | `weapon_detection_collab.py` | — | Weapon detection events with person ID and weapon type |
+| `tiempo_en_zona` | `conteo_area.py` | — | Time each tracked person spent in a given grid cell |
+| `conteo_zona` | `conteo_area.py` | `conteo-zona-service` (8083) | Per-zone person count snapshots with row, column, and timestamp |
+| `alertas_congestion` | `conteo_area.py` | `alerta-congestion-service` (8082) | Congestion alerts triggered when a zone exceeds the configured threshold |
+| `personas_detectadas` | detection scripts | `personas_detectadas` (8084) | Log of unique person IDs first seen, with detection timestamp |
+| `usuario` | — | `gestion-usuarios-service` (8081) | Admin and operator accounts with hashed passwords and role flags |
+
+<Note>
+The `tiempo_en_zona` and `armas_deteccion` tables are written by the Python scripts but do not yet have a dedicated Spring Boot microservice in `docker-compose.yml`. Query them directly through MySQL or add new services following the existing microservice pattern.
+</Note>
+
+### Key column details
+
+**`agresiones_detectadas`** — stores the frame number (`frame_num`), person count (`cant_personas`), bounding box coordinates of those involved (`id_involucrados`), aggression type (`tipo_agresion` — e.g. `golpe_cabeza`, `jaloneo`), distance between persons (`distancia_entre`), and hand/torso velocity vectors.
+
+**`conteo_zona`** — uses a grid model: each row is a (`fila`, `columna`) cell with the person count at that timestamp. The Python script divides the camera frame into a configurable grid and inserts a row per cell per sampling interval.
+
+**`alertas_congestion`** — triggered when the count in a cell exceeds the threshold. Stores the same grid coordinates and the count that caused the alert, plus `fecha_creacion`.
+
+---
+
+## Running the AI scripts
+
+<Note>
+The detection scripts can run in two modes. Choose based on your available hardware.
+</Note>
+
+**Local execution** — requires Python 3.13+, a YOLO model file (`.pt`), and the `ultralytics` and `deep_sort_realtime` packages. The script opens a window showing the annotated video in real time, which is GPU/CPU intensive.
+
+**Google Colab** — upload the script and the `.pt` model to the Colab environment root, install dependencies in a cell, and run with `!python script_name.py`. Output is written to the Colab file system. This is the recommended approach when local hardware is limited.
+
+Both modes connect to the same MySQL instance using the connection details configured in each script. Make sure the database is reachable (e.g., the Docker Compose stack is running) before executing a script.

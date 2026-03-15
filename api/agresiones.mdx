@@ -1,0 +1,226 @@
+---
+title: "Aggressions API"
+description: "REST endpoints for querying aggression detection events."
+---
+
+**Base URL**: `http://localhost:8085`
+
+---
+
+## POST /agresiones
+
+Creates a new aggression detection record.
+
+### Request body
+
+<ParamField body="timestamp" type="string" required>
+  ISO-8601 datetime of the detection event (e.g. `"2024-06-01T14:30:00"`).
+</ParamField>
+
+<ParamField body="videoNombre" type="string" required>
+  Name of the video file in which the aggression was detected.
+</ParamField>
+
+<ParamField body="frameNum" type="integer" required>
+  Frame number within the video where the event occurred.
+</ParamField>
+
+<ParamField body="cantPersonas" type="integer" required>
+  Number of people involved in the detected event.
+</ParamField>
+
+<ParamField body="idInvolucrados" type="string" required>
+  Serialized list of IDs of the individuals involved.
+</ParamField>
+
+<ParamField body="tipoAgresion" type="string" required>
+  Classification of the aggression type detected.
+</ParamField>
+
+<ParamField body="distanciaEntre" type="number" required>
+  Measured distance between the individuals involved.
+</ParamField>
+
+<ParamField body="velocidadManos" type="string" required>
+  Serialized hand-velocity data for the individuals.
+</ParamField>
+
+<ParamField body="velocidadTorsos" type="string" required>
+  Serialized torso-velocity data for the individuals.
+</ParamField>
+
+### Response
+
+Returns the persisted `Agresion` object.
+
+<ResponseField name="id" type="integer">
+  Auto-generated record identifier.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO-8601 datetime of the detection event.
+</ResponseField>
+
+<ResponseField name="videoNombre" type="string">
+  Name of the source video file.
+</ResponseField>
+
+<ResponseField name="frameNum" type="integer">
+  Frame number of the detection.
+</ResponseField>
+
+<ResponseField name="cantPersonas" type="integer">
+  Number of people involved.
+</ResponseField>
+
+<ResponseField name="idInvolucrados" type="string">
+  IDs of the individuals involved.
+</ResponseField>
+
+<ResponseField name="tipoAgresion" type="string">
+  Type of aggression detected.
+</ResponseField>
+
+<ResponseField name="distanciaEntre" type="number">
+  Distance between the individuals.
+</ResponseField>
+
+<ResponseField name="velocidadManos" type="string">
+  Hand-velocity data.
+</ResponseField>
+
+<ResponseField name="velocidadTorsos" type="string">
+  Torso-velocity data.
+</ResponseField>
+
+### Example
+
+```bash
+curl -X POST http://localhost:8085/agresiones \
+  -H "Content-Type: application/json" \
+  -d '{
+    "timestamp": "2024-06-01T14:30:00",
+    "videoNombre": "cam1_2024-06-01.mp4",
+    "frameNum": 420,
+    "cantPersonas": 2,
+    "idInvolucrados": "[3, 7]",
+    "tipoAgresion": "golpe",
+    "distanciaEntre": 1.2,
+    "velocidadManos": "[0.8, 1.4]",
+    "velocidadTorsos": "[0.3, 0.6]"
+  }'
+```
+
+---
+
+## GET /agresiones
+
+Returns all aggression detection records.
+
+### Response
+
+Returns a JSON array of `Agresion` objects. Each item has the same fields as the POST response above.
+
+### Example
+
+```bash
+curl http://localhost:8085/agresiones
+```
+
+---
+
+## GET /agresiones/{id}
+
+Returns a single aggression record by its ID.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  The ID of the aggression record to retrieve.
+</ParamField>
+
+### Response
+
+Returns the matching `Agresion` object (`200 OK`), or `404 Not Found` if no record exists for that ID.
+
+<ResponseField name="id" type="integer">
+  Record identifier.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO-8601 datetime of the detection.
+</ResponseField>
+
+<ResponseField name="videoNombre" type="string">
+  Source video filename.
+</ResponseField>
+
+<ResponseField name="frameNum" type="integer">
+  Frame number of the detection.
+</ResponseField>
+
+<ResponseField name="cantPersonas" type="integer">
+  Number of people involved.
+</ResponseField>
+
+<ResponseField name="idInvolucrados" type="string">
+  IDs of the individuals involved.
+</ResponseField>
+
+<ResponseField name="tipoAgresion" type="string">
+  Aggression type.
+</ResponseField>
+
+<ResponseField name="distanciaEntre" type="number">
+  Distance between individuals.
+</ResponseField>
+
+<ResponseField name="velocidadManos" type="string">
+  Hand-velocity data.
+</ResponseField>
+
+<ResponseField name="velocidadTorsos" type="string">
+  Torso-velocity data.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8085/agresiones/1
+```
+
+---
+
+## GET /agresiones/count
+
+Returns the total number of aggression records stored in the database.
+
+### Response
+
+<ResponseField name="body" type="integer">
+  Total count of aggression records.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8085/agresiones/count
+```
+
+---
+
+## GET /agresiones/ping
+
+Health-check endpoint. Returns `"pong"` to confirm the service is running.
+
+### Response
+
+<ResponseField name="body" type="string">
+  Always returns the string `"pong"`.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8085/agresiones/ping
+```

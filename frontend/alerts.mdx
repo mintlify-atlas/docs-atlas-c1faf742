@@ -1,0 +1,181 @@
+---
+title: "Alerts and notifications"
+description: "Real-time alert feed for congestion, weapon, and aggression incidents."
+---
+
+The alerts subsystem surfaces anomalies detected by the AI pipeline — congestion in monitored zones, weapon detections, and physical aggression events. Two frontend pages are relevant: `alertas.html` for congestion alerts and `agresiones_panel.html` for aggression incidents. The `ip_cam.html` page provides a live video view of the monitored space.
+
+## Congestion alerts (`alertas.html`)
+
+This page is restricted to admin users (`rol === 0`) and auto-loads on page open with a default window of the last 24 hours.
+
+### Data source
+
+Alerts are fetched from the alert service on port 8082:
+
+```javascript alertas.html
+async function cargarAlertas(desdeStr, hastaStr) {
+  const desdeISO = normalizarFecha(desdeStr);
+  const hastaISO = normalizarFecha(hastaStr);
+
+  const res = await fetch(
+    `http://localhost:8082/alertas/get` +
+    `?desde=${encodeURIComponent(new Date(desdeISO).toISOString())}` +
+    `&hasta=${encodeURIComponent(new Date(hastaISO).toISOString())}`
+  );
+
+  const alertas = await res.json();
+  // process and render
+}
+```
+
+Each alert record contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `fila` | number | Grid row of the monitored zone |
+| `columna` | number | Grid column of the monitored zone |
+| `cantidad` | number | Number of people detected in the zone |
+| `fechaCreacion` | string | ISO 8601 timestamp |
+
+Zones are identified by the pattern `F<fila>C<columna>` (e.g. `F1C2`).
+
+### Congestion threshold
+
+An alert entry is considered a congestion event when `cantidad >= 5` for a given zone at a given timestamp. Only these entries appear in the alert list below the chart.
+
+```javascript alertas.html
+alertasCongestion = [];
+fechasOrdenadas.forEach((fecha) => {
+  zonasArray.forEach(zona => {
+    const cantidad = agrupado[fecha][zona] || 0;
+    if (cantidad >= 5) {
+      alertasCongestion.push({ fecha, zona, cantidad });
+    }
+  });
+});
+```
+
+### Chart
+
+A Chart.js line chart (`#chartAlertas`) renders one dataset per zone, plotting person count over time. Each zone is assigned a distinct HSL colour. The X axis shows timestamps formatted as `YYYY-MM-DD HH:MM`.
+
+### Alert list
+
+Entries that exceed the congestion threshold are listed below the chart as Bootstrap `list-group-item-danger` items:
+
+```
+Zona F2C1 - 2025-06-10 14:32 - 7 personas
+```
+
+If no congestion events fall within the selected range, the list shows a plain message: _"No se detectaron alertas de congestión en el rango seleccionado."_
+
+### Date range filter
+
+<Steps>
+  <Step title="Select date range">
+    Use the **Desde** and **Hasta** datetime-local inputs. The default range is the last 24 hours, calculated client-side on page load:
+
+    ```javascript
+    const ahora = new Date();
+    const haceUnDia = new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
+
+    fechaHastaInput.value = ahora.toISOString().slice(0, 16);
+    fechaDesdeInput.value = haceUnDia.toISOString().slice(0, 16);
+    ```
+  </Step>
+  <Step title="Submit the filter form">
+    Click **Filtrar**. The form `submit` event calls `cargarAlertas()` with the new date range. The chart and alert list are both re-rendered.
+  </Step>
+  <Step title="Review results">
+    The chart updates to show the new time window. Any congestion events appear in the list below. The page does not auto-refresh; each query is manual.
+  </Step>
+</Steps>
+
+<Note>
+The page calls `cargarAlertas()` automatically on load using the default 24-hour window. No manual submit is needed to see the initial data.
+</Note>
+
+## Aggression alerts (`agresiones_panel.html`)
+
+Aggression alerts are sourced from a separate service on port 8085.
+
+**Data source:** `GET http://localhost:8085/agresiones`
+
+The full dataset is retrieved on load and on each manual "Buscar" button press. Client-side filtering by the selected date range is applied after retrieval — there is no server-side date filtering on this endpoint.
+
+### Alert types
+
+Each record includes a `tipoAgresion` field that describes the nature of the detected event. Multiple aggression types can be grouped within a single incident. The bar chart aggregates counts by type for the selected window.
+
+### Incident grouping
+
+Consecutive records within 2 minutes of each other are merged into a single incident group to reduce noise:
+
+```javascript agresiones_panel.html
+const diferenciaMin = (ts - actualGrupo.fin) / 1000 / 60;
+if (diferenciaMin <= 2) {
+  actualGrupo.fin = ts;
+  actualGrupo.tipoAgresion.add(actual.tipoAgresion);
+  normalizarIds(actual.idInvolucrados).forEach(id =>
+    actualGrupo.involucrados.add(id)
+  );
+}
+```
+
+Each rendered incident shows:
+- Start and end timestamps of the grouping window
+- Number of individuals involved
+- A red badge listing all aggression types in the group
+
+### Polling and refresh
+
+Neither the congestion page nor the aggression page polls automatically. Both pages load data once on `DOMContentLoaded` and refresh only when the user clicks the filter/search button.
+
+<Info>
+To implement live refresh, add a `setInterval` call around the `cargarAlertas()` or `cargarDatos()` functions with an appropriate interval (e.g. 30 seconds).
+</Info>
+
+## Alert acknowledgment
+
+Neither `alertas.html` nor `agresiones_panel.html` currently implements alert acknowledgment or dismissal. All alerts remain visible for the duration of the session. Closing the browser tab clears the view.
+
+## IP camera live view (`ip_cam.html`)
+
+This page embeds live video from connected cameras. It is accessible from the navbar of `agresiones_panel.html`, `conteo_zona.html`, `deteccion.html`, and `alertas.html` via the **Cámara IP en vivo** button.
+
+### Stream support
+
+The page supports two embedding methods:
+
+<Columns cols={2}>
+  <Card title="MJPEG stream" icon="image">
+    Use an `<img>` tag pointing directly at the camera's MJPEG endpoint:
+
+    ```html
+    <img id="stream"
+      src="http://<camera-ip>:<port>/mjpg/video.mjpg"
+      alt="Stream cámara IP en vivo" />
+    ```
+  </Card>
+  <Card title="HTML5 video" icon="video">
+    Use a `<video>` tag for MP4 or other browser-native formats:
+
+    ```html
+    <video controls autoplay muted>
+      <source src="../src/demos/deteccion.mp4"
+              type="video/mp4" />
+    </video>
+    ```
+  </Card>
+</Columns>
+
+The current implementation embeds two local demo files (`deteccion.mp4` and `agresion.mp4`) as `<video>` elements for development purposes. Replace the `src` values with live stream URLs for production.
+
+<Warning>
+Both `<video>` elements share the same `id="streamVideo"`, which is invalid HTML. In production, assign unique IDs to each element if JavaScript access is needed.
+</Warning>
+
+### Navigation
+
+The navbar on `ip_cam.html` shows only a back link (`← Volver`) pointing to `Deteccion.html`. There is no sidebar on this page and no session guard — any user who knows the URL can access the live view directly.

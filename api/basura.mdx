@@ -1,0 +1,272 @@
+---
+title: "Trash detection API"
+description: "REST endpoints for trash/waste detection statistics and analytics."
+---
+
+**Base URL**: `http://localhost:8080`
+
+<Note>
+  The `basura-deteccion-service` uses MongoDB as its data store and does not define an explicit `server.port`. When run locally outside Docker it defaults to port `8080`.
+</Note>
+
+---
+
+## GET /api/detections
+
+Returns all raw trash detection records stored in the `detections` collection.
+
+### Response
+
+Returns a JSON array of detection documents.
+
+<ResponseField name="_id" type="string">
+  MongoDB document identifier.
+</ResponseField>
+
+<ResponseField name="id" type="integer">
+  Numeric label ID corresponding to the trash category.
+</ResponseField>
+
+<ResponseField name="etiqueta" type="string">
+  Human-readable label for the detected waste type.
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Running total count for this label.
+</ResponseField>
+
+<ResponseField name="conteo" type="integer">
+  Detection count for this record.
+</ResponseField>
+
+<ResponseField name="dia_semana" type="string">
+  Day of the week the detection occurred.
+</ResponseField>
+
+<ResponseField name="fecha_hora" type="string">
+  ISO-8601 datetime of the detection.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/detections
+```
+
+---
+
+## GET /api/test-count
+
+Returns the raw document count from the `detections` MongoDB collection. Useful for verifying database connectivity.
+
+### Response
+
+<ResponseField name="body" type="integer">
+  Number of documents in the `detections` collection.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/test-count
+```
+
+---
+
+## GET /api/db-info
+
+Returns the active MongoDB database name and a list of its collection names.
+
+### Response
+
+<ResponseField name="database" type="string">
+  Name of the connected MongoDB database.
+</ResponseField>
+
+<ResponseField name="collections" type="array">
+  List of collection name strings present in the database.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/db-info
+```
+
+---
+
+## GET /api/ping
+
+Runs a MongoDB ping command and returns its result. Useful for verifying the database connection is healthy.
+
+### Response
+
+<ResponseField name="body" type="string">
+  `"MongoDB PING OK: ..."` on success, or `"MongoDB PING FAILED: ..."` with the error message on failure.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/ping
+```
+
+---
+
+## GET /api/totales
+
+Returns the total detection count aggregated per waste label.
+
+### Response
+
+Returns a JSON array of objects.
+
+<ResponseField name="etiqueta" type="string">
+  Waste label name.
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Total number of detections for this label.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/totales
+```
+
+---
+
+## GET /api/proporciones
+
+Returns each waste label's proportion of total detections as a decimal fraction.
+
+### Response
+
+Returns a JSON array of objects.
+
+<ResponseField name="etiqueta" type="string">
+  Waste label name.
+</ResponseField>
+
+<ResponseField name="proporcion" type="number">
+  Proportion of total detections for this label (0.0 – 1.0).
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/proporciones
+```
+
+---
+
+## GET /api/por-fecha
+
+Returns the daily detection count grouped by date.
+
+### Response
+
+Returns a JSON array of objects.
+
+<ResponseField name="fecha" type="string">
+  Date string for the grouped detections.
+</ResponseField>
+
+<ResponseField name="conteo" type="integer">
+  Total number of detections on that date.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/por-fecha
+```
+
+---
+
+## GET /api/por-dia-semana
+
+Returns the detection count grouped by day of the week.
+
+### Response
+
+Returns a JSON array of objects.
+
+<ResponseField name="dia" type="string">
+  Day of the week (e.g. `"Lunes"`, `"Martes"`).
+</ResponseField>
+
+<ResponseField name="conteo" type="integer">
+  Total detection count for that day of the week.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/por-dia-semana
+```
+
+---
+
+## GET /api/conteo/entre-semana
+
+Returns the aggregate detection count for weekday records (Monday–Friday).
+
+### Response
+
+<ResponseField name="conteo" type="integer">
+  Total detection count across all weekdays.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/conteo/entre-semana
+```
+
+---
+
+## GET /api/conteo/fin-semana
+
+Returns the aggregate detection count for weekend records (Saturday–Sunday).
+
+### Response
+
+<ResponseField name="conteo" type="integer">
+  Total detection count across weekend days.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/conteo/fin-semana
+```
+
+---
+
+## GET /api/conteo/desecho-dia
+
+Returns detection counts broken down by both waste label and day of the week.
+
+### Response
+
+Returns a JSON array of objects.
+
+<ResponseField name="etiqueta" type="string">
+  Waste label name.
+</ResponseField>
+
+<ResponseField name="dia" type="string">
+  Day of the week.
+</ResponseField>
+
+<ResponseField name="conteo" type="integer">
+  Detection count for that label on that day.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/conteo/desecho-dia
+```

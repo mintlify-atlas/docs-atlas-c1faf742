@@ -1,0 +1,114 @@
+---
+title: "Google Colab quickstart"
+description: "Process surveillance videos in Google Colab without local GPU requirements."
+---
+
+Google Colab lets you run Espacios Seguros IA detection scripts entirely in the cloud, with no local GPU required. Output is saved as a processed video file directly to the Colab environment's root directory.
+
+<Note>
+  Colab uses `cv2_imshow` instead of `cv2.imshow` for displaying frames. The scripts in the `google_colab/` directory are already adapted for this environment.
+</Note>
+
+## Setup and execution
+
+<Steps>
+  <Step title="Open a Google Colab session">
+    Navigate to [colab.research.google.com](https://colab.research.google.com) and create a new notebook. For GPU acceleration, go to **Runtime → Change runtime type** and select **T4 GPU**.
+  </Step>
+
+  <Step title="Download the YOLOv8x model">
+    Download the YOLOv8x model weights from the link below. This is the recommended model for Colab due to its higher accuracy:
+
+    **[Download yolov8x.pt](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8x.pt)**
+
+    Or download it directly inside a Colab cell:
+
+    ```python
+    !wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8x.pt
+    ```
+  </Step>
+
+  <Step title="Upload project files and model">
+    Upload the desired script (e.g. `agresiones.py`) and the `yolov8x.pt` model file to the **root directory** of your Colab environment. You can do this via the file browser panel on the left side of the Colab interface.
+
+    Your Colab root should look like:
+
+    ```
+    /content/
+    ├── yolov8x.pt
+    ├── agresiones.py
+    └── your_video.mp4   (if needed by the script)
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    In a new code cell, install the required libraries:
+
+    ```python
+    !pip install ultralytics deep_sort_realtime
+    ```
+  </Step>
+
+  <Step title="Run the script">
+    Execute your chosen script in a code cell:
+
+    ```python
+    !python nombre_del_archivo.py
+    ```
+  </Step>
+
+  <Step title="Retrieve the output video">
+    The processed output video is saved directly to the Colab root directory (`/content/`). Download it using the file browser, or run:
+
+    ```python
+    from google.colab import files
+    files.download('output.mp4')
+    ```
+  </Step>
+</Steps>
+
+## Available scripts
+
+The `google_colab/` directory contains the following scripts, each pre-configured for the Colab environment:
+
+| Script | Description |
+|---|---|
+| `agresiones.py` | Aggression detection via pose estimation using YOLOv8 |
+| `armas_agresiones.py` | Combined weapon and aggression detection in a single pipeline |
+| `conteo_area.py` | Zone-based person counting with configurable area boundaries |
+| `deteccion_comportamiento.py` | General behavior detection and anomaly flagging |
+| `trash_segmentation_prediction.py` | Trash detection and segmentation on static images |
+| `trash_segmentation_video.py` | Trash detection and segmentation on video input |
+| `weapon_detection_collab.py` | Weapon detection using a custom Roboflow-hosted model |
+
+## Running a specific script
+
+<CodeGroup>
+```python Aggression detection
+!python agresiones.py
+```
+
+```python Weapon + aggression detection
+!python armas_agresiones.py
+```
+
+```python Zone-based person counting
+!python conteo_area.py
+```
+
+```python Behavior detection
+!python deteccion_comportamiento.py
+```
+
+```python Trash detection (images)
+!python trash_segmentation_prediction.py
+```
+
+```python Trash detection (video)
+!python trash_segmentation_video.py
+```
+
+```python Weapon detection (Roboflow)
+!python weapon_detection_collab.py
+```
+</CodeGroup>

@@ -1,0 +1,55 @@
+---
+title: "Weapons detection API"
+description: "REST endpoints for querying weapon detection alerts."
+---
+
+**Base URL**: `http://localhost:8080`
+
+<Note>
+  The `agresionesArmas` service does not define an explicit `server.port` in its configuration. When run locally outside Docker it defaults to port `8080`.
+</Note>
+
+---
+
+## GET /api/armas/alertas
+
+Returns all weapon detection alert records.
+
+### Response
+
+Returns a JSON array of `AlertaArma` objects.
+
+<ResponseField name="id" type="integer">
+  Auto-generated alert identifier.
+</ResponseField>
+
+<ResponseField name="idPersona" type="integer">
+  Tracker ID of the person associated with the weapon detection.
+</ResponseField>
+
+<ResponseField name="tipoArma" type="string">
+  Classification of the detected weapon type.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO-8601 datetime when the alert was recorded.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8080/api/armas/alertas
+```
+
+### Example response
+
+```json
+[
+  {
+    "id": 1,
+    "idPersona": 42,
+    "tipoArma": "knife",
+    "timestamp": "2024-06-01T15:22:10"
+  }
+]
+```
